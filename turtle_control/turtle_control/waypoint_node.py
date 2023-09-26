@@ -33,14 +33,12 @@ class Waypoint(Node):
         # Adjusted frequency for 100 Hz
         timer_period = 1.0/self.frequency  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
-        self.i = 0
 
     def timer_callback(self):
-        msg = String()
-        msg.data = 'Hello World: %d' % self.i
-        self.publisher_.publish(msg)
-        self.get_logger().info('Publishing: "%s"' % msg.data)
-        self.i += 1
+        # Issuing debug message
+        # To run node in a mode that allows for viewing debug messages, run:
+        # ros2 run turtle_control waypoint --ros-args -p frequency:=100.0 --log-level debug
+        self.get_logger().debug('Issuing Command!')
 
 
 def main(args=None):
