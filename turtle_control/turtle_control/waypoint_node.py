@@ -72,9 +72,15 @@ class Waypoint(Node):
         # Temporarily hardcoding starting pos.
         pos_x = 10.0
         pos_y = 10.0
+        # Total distance travelled
         distance = 0.0
         for i in request.points:
+            # Find the distance between the curr pos and the new position
             diff = math.sqrt((pos_x - i.x)**2 + (pos_y - i.y)**2)
+            # Set the curr pos as the just now new position
+            pos_x = i.x
+            pos_y = i.y
+            # Add to the total distance travelled
             distance += diff
         response.distance = distance
         return response
