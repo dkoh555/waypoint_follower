@@ -19,6 +19,7 @@ from std_srvs.srv import Empty # Imported the service std_srvs/srv/Empty
 from rcl_interfaces.msg import ParameterDescriptor
 from enum import Enum
 from turtle_interfaces.srv import Waypoints
+import math
 
 # Enum class that indicates the different states of the node: MOVING, STOPPED
 class state(Enum):
@@ -68,7 +69,14 @@ class Waypoint(Node):
         return response
     
     def waypoints_callback(self, request, response):
-        response = 0.0
+        # Temporarily hardcoding starting pos.
+        pos_x = 10.0
+        pos_y = 10.0
+        distance = 0.0
+        for i in request.points:
+            diff = math.sqrt((pos_x - i.x)**2 + (pos_y - i.y)**2)
+            distance += diff
+        response.distance = distance
         return response
 
 
