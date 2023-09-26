@@ -18,6 +18,7 @@ from rclpy.node import Node
 from std_srvs.srv import Empty # Imported the service std_srvs/srv/Empty
 from rcl_interfaces.msg import ParameterDescriptor
 from enum import Enum
+from turtle_interfaces.srv import Waypoints
 
 # Enum class that indicates the different states of the node: MOVING, STOPPED
 class state(Enum):
@@ -36,7 +37,10 @@ class Waypoint(Node):
                                ParameterDescriptor(description="The frequency in which the msg is published"))
         self.frequency = self.get_parameter("frequency").get_parameter_value().double_value
         # Create service named toggle
-        self.srv = self.create_service(Empty, 'toggle', self.empty_callback)
+        self.srv_1 = self.create_service(Empty, 'toggle', self.empty_callback)
+        # Create service named load
+        self.srv_2 = self.create_service(Waypoints, 'load', self.waypoints_callback)
+
         # Adjusted frequency for whatever the frequency param value is
         timer_period = 1.0/self.frequency  # seconds
         # create timer and timer callback for debug message issuing
@@ -61,6 +65,10 @@ class Waypoint(Node):
             self.state = state.MOVING
             self.get_logger().info('Moving')
 
+        return response
+    
+    def waypoints_callback(self, request, response):
+        response = 0.0
         return response
 
 
