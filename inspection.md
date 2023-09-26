@@ -135,6 +135,8 @@ If the nodes launched from the `launchfile` are not running, you will get incorr
 1. Use the command `ros2 param get /mover velocity` to retrieve the value of the `/mover velocity` parameter, which is `4.5`.
 2. The ROS command to call the `/switch` service, and it's output is listed below:
     ```
+   damien@damien-xps:~/me495/hw_ros_ws$ ros2 service call /switch crazy_turtle_interfaces/srv/Switch "{mixer: {x: 1.0, y: 2.0, theta: 0.0, linear_velocity: 4.0, angular_velocity: 3.0}}"
+
    requester: making request: crazy_turtle_interfaces.srv.Switch_Request(mixer=turtlesim.msg.Pose(x=1.0, y=2.0, theta=0.0, linear_velocity=4.0, angular_velocity=3.0))
 
    response:
