@@ -19,13 +19,19 @@ from rclpy.node import Node
 from std_msgs.msg import String
 from rcl_interfaces.msg import ParameterDescriptor
 
-# The Waypoint class that is a node
+# The Waypoint class that is a publisher node
 class Waypoint(Node):
 
     def __init__(self):
         super().__init__('waypoint')
+        # declare and get the frequency parameter and set default value
+        self.declare_parameter("frequency", 100.0,
+                               ParameterDescriptor(description="The frequency in which the msg is published"))
+        self.frequency = self.get_parameter("frequency").get_parameter_value().double_value
+
         self.publisher_ = self.create_publisher(String, 'topic', 10)
-        timer_period = 0.01  # seconds
+        # Adjusted frequency for 100 Hz
+        timer_period = 1.0/self.frequency  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0
 
