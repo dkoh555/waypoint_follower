@@ -15,11 +15,12 @@ setup(
     zip_safe=True,
     maintainer='damien',
     maintainer_email='damienkoh2025@u.northwestern.edu',
-    description='TODO: Package description',
+    description='Controls a turtle in turtlesim',
     license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'waypoint = turtle_control.waypoint_node:main',
         ],
     },
 )
