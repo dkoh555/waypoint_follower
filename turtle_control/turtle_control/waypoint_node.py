@@ -15,8 +15,7 @@ PARAMETERS:
 
 import rclpy
 from rclpy.node import Node
-
-from std_msgs.msg import String
+from std_srvs.srv import Empty # Imported the service std_srvs/srv/Empty
 from rcl_interfaces.msg import ParameterDescriptor
 
 # The Waypoint class that is a publisher node
@@ -28,10 +27,11 @@ class Waypoint(Node):
         self.declare_parameter("frequency", 100.0,
                                ParameterDescriptor(description="The frequency in which the msg is published"))
         self.frequency = self.get_parameter("frequency").get_parameter_value().double_value
-
-        self.publisher_ = self.create_publisher(String, 'topic', 10)
-        # Adjusted frequency for 100 Hz
+        # Create service named toggle
+        self.srv = self.create_service(Empty, 'toggle', self.empty_callback)
+        # Adjusted frequency for whatever the frequency param value is
         timer_period = 1.0/self.frequency  # seconds
+        # create timer and timer callback for debug message issuing
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
     def timer_callback(self):
@@ -39,6 +39,9 @@ class Waypoint(Node):
         # To run node in a mode that allows for viewing debug messages, run:
         # ros2 run turtle_control waypoint --ros-args -p frequency:=100.0 --log-level debug
         self.get_logger().debug('Issuing Command!')
+
+    def empty_callback(self, request, response):
+        self.get_logger().info('Incoming request')
 
 
 def main(args=None):
