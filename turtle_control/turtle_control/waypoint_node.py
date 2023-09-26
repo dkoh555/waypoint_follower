@@ -17,12 +17,20 @@ import rclpy
 from rclpy.node import Node
 from std_srvs.srv import Empty # Imported the service std_srvs/srv/Empty
 from rcl_interfaces.msg import ParameterDescriptor
+from enum import Enum
+
+# Enum class that indicates the different states of the node: MOVING, STOPPED
+class state(Enum):
+    MOVING = 0
+    STOPPED = 1
 
 # The Waypoint class that is a publisher node
 class Waypoint(Node):
 
     def __init__(self):
         super().__init__('waypoint')
+        # Initialize node state as STOPPED
+        self.state = state.STOPPED
         # declare and get the frequency parameter and set default value
         self.declare_parameter("frequency", 100.0,
                                ParameterDescriptor(description="The frequency in which the msg is published"))
@@ -40,8 +48,21 @@ class Waypoint(Node):
         # ros2 run turtle_control waypoint --ros-args -p frequency:=100.0 --log-level debug
         self.get_logger().debug('Issuing Command!')
 
+    # Test the callback with the following command:
+    # ros2 service call /toggle std_srvs/srv/Empty "{}"
     def empty_callback(self, request, response):
-        self.get_logger().info('Incoming request')
+        self.get_logger().info('Incoming Request!')
+
+        if self.state == state.MOVING:
+            self.state = state.STOPPED
+            self.get_logger().info('Stopping')
+
+        elif self.state == state.STOPPED:
+            self.state = state.MOVING
+            self.get_logger().info('Moving')
+
+        return response
+
 
 
 def main(args=None):

@@ -18,6 +18,8 @@
   <depend>std_msgs</depend>
   <depent>std_srvs</depend>
 
+  <depend>enum</depend>
+
   <export>
     <build_type>ament_python</build_type>
   </export>
