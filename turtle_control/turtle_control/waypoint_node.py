@@ -21,6 +21,7 @@ from enum import Enum
 from turtle_interfaces.srv import Waypoints
 from turtlesim.srv import TeleportAbsolute
 import math
+import asyncio
 
 # Enum class that indicates the different states of the node: MOVING, STOPPED
 class state(Enum):
@@ -44,11 +45,16 @@ class Waypoint(Node):
         # Create service named load
         self.srv_2 = self.create_service(Waypoints, 'load', self.waypoints_callback)
 
-        # Create client for repositioning turtlesim
-        self.cli = self.create_client(TeleportAbsolute, 'teleport_absolute') # when running from CLI will need to account for namespace
-        while not self.cli.wait_for_service(timeout_sec=1.0):
+        # Create client for reseting the turtlesim
+        self.cli_1 = self.create_client(Empty, 'reset')
+        while not self.cli_1.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
-        self.req = TeleportAbsolute.Request()
+        self.req_reset = Empty.Request()
+        # Create client for repositioning turtlesim
+        self.cli_2 = self.create_client(TeleportAbsolute, 'turtle1/teleport_absolute') # when running from CLI will need to account for turtle name
+        while not self.cli_2.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('service not available, waiting again...')
+        self.req_repos = TeleportAbsolute.Request()
 
         # Adjusted frequency for whatever the frequency param value is
         timer_period = 1.0/self.frequency  # seconds
@@ -77,22 +83,26 @@ class Waypoint(Node):
         return response
     
     # When receives a number waypoints via service, it will then submit a client request
-    # to turtlesim to reposition the turtle
+    # to reset turtlesim, then another to reposition the turtle to each waypoint
     # Example code to run for providing waypoints:
     # ros2 service call /load turtle_interfaces/srv/Waypoints "{points: [{x: 8.2, y: 5.0, z: 0.0}, {x: 4.0, y: 3.0, z: 0.0}]}"
-    def waypoints_callback(self, request, response):
+    async def waypoints_callback(self, request, response):
         # Temporarily hardcoding starting pos.
         pos_x = 10.0
         pos_y = 10.0
         # Total distance travelled
         distance = 0.0
+        await self.cli_1.call_async(self.req_reset)
+        self.get_logger().info('Reseting')
+        # rclpy.spin_until_future_complete(self, self.future)
         for i in request.points:
             # Submit client request to move turtlesim to new position
-            self.req.x = i.x
-            self.req.y = i.y
-            self.req.theta = 0.0
-            self.future = self.cli.call_async(self.req)
+            self.req_repos.x = i.x
+            self.req_repos.y = i.y
+            self.req_repos.theta = 0.0
+            await self.cli_2.call_async(self.req_repos)
             # rclpy.spin_until_future_complete(self, self.future)
+            self.get_logger().info('Repositioning')
             # Find the distance between the curr pos and the new position
             diff = math.sqrt((pos_x - i.x)**2 + (pos_y - i.y)**2)
             # Set the curr pos as the just now new position

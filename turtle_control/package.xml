@@ -19,6 +19,7 @@
   <depent>std_srvs</depend>
   <depend>enum</depend>
   <depend>turtle_interfaces</depend>
+  <depend>asyncio</depend>
 
   <export>
     <build_type>ament_python</build_type>
