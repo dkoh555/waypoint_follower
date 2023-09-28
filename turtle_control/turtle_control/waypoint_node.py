@@ -22,6 +22,7 @@ from turtle_interfaces.srv import Waypoints
 from turtlesim.srv import TeleportAbsolute
 import math
 import asyncio
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 # Enum class that indicates the different states of the node: MOVING, STOPPED
 class state(Enum):
@@ -35,23 +36,26 @@ class Waypoint(Node):
         super().__init__('waypoint')
         # Initialize node state as STOPPED
         self.state = state.STOPPED
+        # This node will use Reentrant Callback Groups for nested services
+        self.cbgroup = ReentrantCallbackGroup()
         # declare and get the frequency parameter and set default value
         self.declare_parameter("frequency", 100.0,
                                ParameterDescriptor(description="The frequency in which the msg is published"))
         self.frequency = self.get_parameter("frequency").get_parameter_value().double_value
 
         # Create service named toggle
-        self.srv_1 = self.create_service(Empty, 'toggle', self.empty_callback)
+        self.srv_1 = self.create_service(Empty, 'toggle', self.empty_callback, callback_group=self.cbgroup)
         # Create service named load
-        self.srv_2 = self.create_service(Waypoints, 'load', self.waypoints_callback)
+        self.srv_2 = self.create_service(Waypoints, 'load', self.waypoints_callback, callback_group=self.cbgroup)
 
         # Create client for reseting the turtlesim
         self.cli_1 = self.create_client(Empty, 'reset')
         while not self.cli_1.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
         self.req_reset = Empty.Request()
+
         # Create client for repositioning turtlesim
-        self.cli_2 = self.create_client(TeleportAbsolute, 'turtle1/teleport_absolute') # when running from CLI will need to account for turtle name
+        self.cli_2 = self.create_client(TeleportAbsolute, 'turtle1/teleport_absolute', callback_group=self.cbgroup) # when running from CLI will need to account for turtle name
         while not self.cli_2.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
         self.req_repos = TeleportAbsolute.Request()
@@ -59,7 +63,7 @@ class Waypoint(Node):
         # Adjusted frequency for whatever the frequency param value is
         timer_period = 1.0/self.frequency  # seconds
         # create timer and timer callback for debug message issuing
-        self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.timer = self.create_timer(timer_period, self.timer_callback, callback_group=self.cbgroup)
 
     def timer_callback(self):
         # Issuing debug message
@@ -94,15 +98,15 @@ class Waypoint(Node):
         distance = 0.0
         await self.cli_1.call_async(self.req_reset)
         self.get_logger().info('Reseting')
-        # rclpy.spin_until_future_complete(self, self.future)
+        # await rclpy.spin_until_future_complete(self, self.future)
         for i in request.points:
             # Submit client request to move turtlesim to new position
             self.req_repos.x = i.x
             self.req_repos.y = i.y
             self.req_repos.theta = 0.0
             await self.cli_2.call_async(self.req_repos)
-            # rclpy.spin_until_future_complete(self, self.future)
             self.get_logger().info('Repositioning')
+            # await rclpy.spin_until_future_complete(self, self.future)
             # Find the distance between the curr pos and the new position
             diff = math.sqrt((pos_x - i.x)**2 + (pos_y - i.y)**2)
             # Set the curr pos as the just now new position
