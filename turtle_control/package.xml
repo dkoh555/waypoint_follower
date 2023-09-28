@@ -16,7 +16,7 @@
   <depend>turtlesim</depend>
 
   <depend>std_msgs</depend>
-  <depent>std_srvs</depend>
+  <depend>std_srvs</depend>
   <depend>enum</depend>
   <depend>turtle_interfaces</depend>
   <depend>asyncio</depend>
