@@ -19,7 +19,7 @@ from std_srvs.srv import Empty # Imported the service std_srvs/srv/Empty
 from rcl_interfaces.msg import ParameterDescriptor
 from enum import Enum
 from turtle_interfaces.srv import Waypoints
-from turtlesim.srv import TeleportAbsolute
+from turtlesim.srv import TeleportAbsolute, SetPen
 import math
 import asyncio
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -49,16 +49,22 @@ class Waypoint(Node):
         self.srv_2 = self.create_service(Waypoints, 'load', self.waypoints_callback, callback_group=self.cbgroup)
 
         # Create client for reseting the turtlesim
-        self.cli_1 = self.create_client(Empty, 'reset')
+        self.cli_1 = self.create_client(Empty, 'reset', callback_group=self.cbgroup)
         while not self.cli_1.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
         self.req_reset = Empty.Request()
 
         # Create client for repositioning turtlesim
-        self.cli_2 = self.create_client(TeleportAbsolute, 'turtle1/teleport_absolute', callback_group=self.cbgroup) # when running from CLI will need to account for turtle name
+        self.cli_2 = self.create_client(TeleportAbsolute, 'turtle1/teleport_absolute', callback_group=self.cbgroup)
         while not self.cli_2.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
         self.req_repos = TeleportAbsolute.Request()
+
+        # Create client for toggling the marker pen on/off
+        self.cli_3 = self.create_client(SetPen, 'turtle1/set_pen', callback_group=self.cbgroup)
+        while not self.cli_3.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('service not available, waiting again...')
+        self.req_pen = SetPen.Request()
 
         # Adjusted frequency for whatever the frequency param value is
         timer_period = 1.0/self.frequency  # seconds
@@ -96,9 +102,10 @@ class Waypoint(Node):
         pos_y = 10.0
         # Total distance travelled
         distance = 0.0
+        # Reset the turtle and turn its pen off immediately
         await self.cli_1.call_async(self.req_reset)
         self.get_logger().info('Reseting')
-        # await rclpy.spin_until_future_complete(self, self.future)
+        await self.pen_off(True)
         for i in request.points:
             # Submit client request to move turtlesim to new position
             self.req_repos.x = i.x
@@ -106,7 +113,8 @@ class Waypoint(Node):
             self.req_repos.theta = 0.0
             await self.cli_2.call_async(self.req_repos)
             self.get_logger().info('Repositioning')
-            # await rclpy.spin_until_future_complete(self, self.future)
+            # Draw the X around the current position
+            await self.draw_x(i.x, i.y)
             # Find the distance between the curr pos and the new position
             diff = math.sqrt((pos_x - i.x)**2 + (pos_y - i.y)**2)
             # Set the curr pos as the just now new position
@@ -116,6 +124,39 @@ class Waypoint(Node):
             distance += diff
         response.distance = distance
         return response
+    
+    # Draws an X around the provided coordinate by calling the repositioning and set pen services
+    async def draw_x(self, x_origin, y_origin):
+        # Initialize an array of the coord of each vertices of the X
+        size = 0.35
+        x_vert_array = [x_origin-size, x_origin+size, x_origin-size, x_origin+size]
+        y_vert_array = [y_origin-size, y_origin-size, y_origin+size, y_origin+size]
+        # Turn the pen on and go to each vertices
+        await self.pen_off(False)
+        for i in range(4):
+            self.req_repos.x = x_vert_array[i]
+            self.req_repos.y = y_vert_array[i]
+            self.req_repos.theta = 0.0
+            await self.cli_2.call_async(self.req_repos)
+            self.req_repos.x = x_origin
+            self.req_repos.y = y_origin
+            self.req_repos.theta = 0.0
+            await self.cli_2.call_async(self.req_repos)
+        # Turn the pen off
+        await self.pen_off(True)
+        
+
+
+    # Calls a service to toggle the pen of the turtle on/off
+    # To turn the pen off, you can run the following command:
+    # ros2 service call /turtle1/set_pen turtlesim/srv/SetPen "{r: 255, g: 255, b: 255, width: 3, 'off': 1}"
+    async def pen_off(self, pen_off):
+        self.req_pen.r = 255
+        self.req_pen.g = 255
+        self.req_pen.b = 255
+        self.req_pen.width = 3
+        self.req_pen.off = pen_off
+        await self.cli_3.call_async(self.req_pen)
 
 def main(args=None):
     rclpy.init(args=args)
