@@ -153,6 +153,8 @@ class Waypoint(Node):
         self.req_repos.y = request.points[0].y
         self.req_repos.theta = 0.0
         await self.cli_2.call_async(self.req_repos)
+        # Set node state to STOPPED
+        self.state = state.MOVING
         # Responds to client with total distance of waypoints
         response.distance = distance
         return response
