@@ -20,6 +20,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from enum import Enum
 from turtle_interfaces.srv import Waypoints
 from turtlesim.srv import TeleportAbsolute, SetPen
+from turtlesim.msg import Pose
 import math
 import asyncio
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -34,7 +35,7 @@ class Waypoint(Node):
 
     def __init__(self):
         super().__init__('waypoint')
-        # Initialize node state as STOPPED
+        # Initalize variables
         self.state = state.STOPPED
         # This node will use Reentrant Callback Groups for nested services
         self.cbgroup = ReentrantCallbackGroup()
@@ -43,29 +44,44 @@ class Waypoint(Node):
                                ParameterDescriptor(description="The frequency in which the msg is published"))
         self.frequency = self.get_parameter("frequency").get_parameter_value().double_value
 
+        ###
+        ### SERVICES
+        ###
         # Create service named toggle
         self.srv_1 = self.create_service(Empty, 'toggle', self.empty_callback, callback_group=self.cbgroup)
         # Create service named load
         self.srv_2 = self.create_service(Waypoints, 'load', self.waypoints_callback, callback_group=self.cbgroup)
 
+        ###
+        ### CLIENTS
+        ###
         # Create client for reseting the turtlesim
         self.cli_1 = self.create_client(Empty, 'reset', callback_group=self.cbgroup)
         while not self.cli_1.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
         self.req_reset = Empty.Request()
-
         # Create client for repositioning turtlesim
         self.cli_2 = self.create_client(TeleportAbsolute, 'turtle1/teleport_absolute', callback_group=self.cbgroup)
         while not self.cli_2.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
         self.req_repos = TeleportAbsolute.Request()
-
         # Create client for toggling the marker pen on/off
         self.cli_3 = self.create_client(SetPen, 'turtle1/set_pen', callback_group=self.cbgroup)
         while not self.cli_3.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
         self.req_pen = SetPen.Request()
 
+        ###
+        ### SUBSCRIBERS
+        ###
+        # Create subscriber to get the current position of the turtle
+        self.sub_pos = self.create_subscription(Pose, 'turtle1/pose', self.sub_pos_callback, 10)
+        self.sub_pos
+
+
+        ###
+        ### TIMER
+        ###
         # Adjusted frequency for whatever the frequency param value is
         timer_period = 1.0/self.frequency  # seconds
         # create timer and timer callback for debug message issuing
@@ -75,7 +91,13 @@ class Waypoint(Node):
         # Issuing debug message
         # To run node in a mode that allows for viewing debug messages, run:
         # ros2 run turtle_control waypoint --ros-args -p frequency:=100.0 --log-level debug
-        self.get_logger().debug('Issuing Command!')
+        if self.state == state.MOVING:
+            self.get_logger().debug('Issuing Command!')
+
+    # Takes note of most recent x & y coord from the pose topic
+    def sub_pos_callback(self, msg):
+        self.recent_x = msg.x
+        self.recent_y = msg.y
 
     # Test the callback with the following command:
     # ros2 service call /toggle std_srvs/srv/Empty "{}"
@@ -88,24 +110,26 @@ class Waypoint(Node):
 
         elif self.state == state.STOPPED:
             self.state = state.MOVING
-            self.get_logger().info('Moving')
 
         return response
     
     # When receives a number waypoints via service, it will then submit a client request
     # to reset turtlesim, then another to reposition the turtle to each waypoint
     # Example code to run for providing waypoints:
-    # ros2 service call /load turtle_interfaces/srv/Waypoints "{points: [{x: 8.2, y: 5.0, z: 0.0}, {x: 4.0, y: 3.0, z: 0.0}]}"
+    # ros2 service call /load turtle_interfaces/srv/Waypoints "{points: [{x: 8.2, y: 5.0, z: 0.0}, {x: 4.0, y: 3.0, z: 0.0}, {x: 3.2, y: 9.4, z: 0.0}]}"
     async def waypoints_callback(self, request, response):
-        # Temporarily hardcoding starting pos.
-        pos_x = 10.0
-        pos_y = 10.0
         # Total distance travelled
         distance = 0.0
         # Reset the turtle and turn its pen off immediately
         await self.cli_1.call_async(self.req_reset)
         self.get_logger().info('Reseting')
         await self.pen_off(True)
+        # Taking note of turtle's initial reset coord
+        orig_x = self.recent_x
+        orig_y = self.recent_y
+        pos_x = orig_x
+        pos_y = orig_y
+        # Move the turtle around, drawing the X's, and calculating the total distance for the entire 'cycle'
         for i in request.points:
             # Submit client request to move turtlesim to new position
             self.req_repos.x = i.x
@@ -122,6 +146,14 @@ class Waypoint(Node):
             pos_y = i.y
             # Add to the total distance travelled
             distance += diff
+        diff = math.sqrt((pos_x - orig_x)**2 + (pos_y - orig_y)**2) # Adding the distance from the last point to the starting one
+        distance += diff
+        # Repos the turtle to its first waypoint
+        self.req_repos.x = request.points[0].x
+        self.req_repos.y = request.points[0].y
+        self.req_repos.theta = 0.0
+        await self.cli_2.call_async(self.req_repos)
+        # Responds to client with total distance of waypoints
         response.distance = distance
         return response
     
