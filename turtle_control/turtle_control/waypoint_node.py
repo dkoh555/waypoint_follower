@@ -115,15 +115,16 @@ class Waypoint(Node):
         self.turtle_mode = mode.REACHED
 
     def timer_callback(self):
-        # Issuing debug message
-        # To run node in a mode that allows for viewing debug messages, run:
-        # ros2 run turtle_control waypoint --ros-args -p frequency:=100.0 --log-level debug
         
         move_msg = Twist()
 
         # If the node is in the MOVING state, move the turtle to the next waypoint
         if self.state == state.MOVING:
+            # Issuing debug message
+            # To run node in a mode that allows for viewing debug messages, run:
+            # ros2 run turtle_control waypoint --ros-args -p frequency:=100.0 --log-level debug
             self.get_logger().debug('Issuing Command!')
+
             # If the new index is larger than the number of waypoints provided, reset back to 0
             if self.target_point_index == len(self.point_list):
                 self.target_point_index = 0
@@ -155,7 +156,13 @@ class Waypoint(Node):
             self.get_logger().info('Stopping')
 
         elif self.state == state.STOPPED:
-            self.state = state.MOVING
+            # If no waypoints are loaded, then log an error message and keep node in STOPPED state
+            if self.point_list == None:
+                self.get_logger().error('No waypoints loaded. Load them with the "load" service.')
+                self.get_logger().error('Staying in STOPPED state.')
+                self.state = state.STOPPED
+            else:
+                self.state = state.MOVING
 
         return response
     
@@ -168,11 +175,11 @@ class Waypoint(Node):
         self.init_var()
         # Save the list of waypoints
         self.point_list = request.points
+        self.get_logger().info('Loading waypoints')
         # Total distance travelled
         distance = 0.0
         # Reset the turtle and turn its pen off immediately
         await self.cli_1.call_async(self.req_reset)
-        self.get_logger().info('Reseting')
         await self.pen_off(True)
         # Taking note of turtle's initial reset coord
         orig_x = self.recent_x
@@ -186,7 +193,6 @@ class Waypoint(Node):
             self.req_repos.y = i.y
             self.req_repos.theta = 0.0
             await self.cli_2.call_async(self.req_repos)
-            self.get_logger().info('Repositioning')
             # Draw the X around the current position
             await self.draw_x(i.x, i.y)
             # Find the distance between the curr pos and the new position
@@ -252,8 +258,6 @@ class Waypoint(Node):
         delt_x = end_x - start_x
         delt_y = end_y - start_y
         theta = math.atan2(delt_y, delt_x)
-        self.get_logger().info('targ theta: "%s"' % theta)
-        self.get_logger().info('curr theta: "%s"' % self.recent_theta)
         return theta
     
     # Function that returns a bool on whether the a given coord is within a certain radius of another given coord
@@ -286,7 +290,6 @@ class Waypoint(Node):
         
         # When the turtle is at a waypoint
         if self.turtle_mode == mode.REACHED:
-            self.get_logger().error('REACHED')
             # Calculates the angle needed to face the target point
             self.target_theta = self.next_theta(self.recent_x, self.recent_y, point.x, point.y)
             # Switch to ROTATING mode
@@ -294,8 +297,6 @@ class Waypoint(Node):
 
         # When the turtle is rotating itself at the start point
         elif self.turtle_mode == mode.ROTATING:
-            self.get_logger().error('ROTATING')
-            self.get_logger().info('diff theta: "%s"' % abs(self.recent_theta - self.target_theta))
             # If the turtle is facing the target point (or close enough to that), switch to TRANSLATING mode
             if abs(self.recent_theta - self.target_theta) <= 0.01:
                 self.turtle_mode = mode.TRANSLATING
@@ -308,7 +309,6 @@ class Waypoint(Node):
         
         # When the turtle is moving forward to the target point
         elif self.turtle_mode == mode.TRANSLATING:
-            self.get_logger().error('TRANSLATING')
             # If the turtle is near the target point, switch to REACHED mode
             if self.is_near(self.recent_x, self.recent_y, point.x, point.y, self.tolerance):
                 self.turtle_mode = mode.REACHED
