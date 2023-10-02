@@ -36,6 +36,7 @@ class Waypoint(Node):
     def __init__(self):
         super().__init__('waypoint')
         # Initalize variables
+        self.pont_list = None
         self.state = state.STOPPED
         # This node will use Reentrant Callback Groups for nested services
         self.cbgroup = ReentrantCallbackGroup()
@@ -153,6 +154,8 @@ class Waypoint(Node):
         self.req_repos.y = request.points[0].y
         self.req_repos.theta = 0.0
         await self.cli_2.call_async(self.req_repos)
+        # TEST THETA
+        self.next_theta(self.recent_x, self.recent_y, request.points[1].x, request.points[1].y)
         # Set node state to STOPPED
         self.state = state.MOVING
         # Responds to client with total distance of waypoints
@@ -179,7 +182,17 @@ class Waypoint(Node):
         # Turn the pen off
         await self.pen_off(True)
         
-
+    ###
+    ### TURTLE WAYPOINT NAVIGATION
+    ###
+    # Function that returns the correct theta (/pose) from starting waypoint to the target
+    # 0.0 theta means the turtle is facing westward/the right
+    def next_theta(self, start_x, start_y, end_x, end_y):
+        delt_x = end_x - start_x
+        delt_y = end_y - start_y
+        theta = math.atan2(delt_y, delt_x)
+        self.get_logger().info('theta: "%s"' % theta)
+        return theta
 
     # Calls a service to toggle the pen of the turtle on/off
     # To turn the pen off, you can run the following command:
