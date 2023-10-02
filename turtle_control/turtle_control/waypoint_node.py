@@ -43,15 +43,25 @@ class Waypoint(Node):
     def __init__(self):
         super().__init__('waypoint')
         # Initalize variables
-        self.pont_list = None
+        self.point_list = None
+        self.target_point_index = 1
+        self.target_theta = None
         self.state = state.STOPPED
-        self.turtle_mode = mode.ROTATING
+        self.turtle_mode = mode.REACHED
         # This node will use Reentrant Callback Groups for nested services
         self.cbgroup = ReentrantCallbackGroup()
-        # declare and get the frequency parameter and set default value
+
+        ###
+        ### Parameters
+        ###
+        # Declare and get the frequency parameter and set default value
         self.declare_parameter("frequency", 100.0,
                                ParameterDescriptor(description="The frequency in which the msg is published"))
         self.frequency = self.get_parameter("frequency").get_parameter_value().double_value
+        # Declare and get the tolerance (for waypoint proximity) parameter and set the default value
+        self.declare_parameter("tolerance", 0.5,
+                               ParameterDescriptor(description="The proximity in which the turtle needs to be to a waypoint to classify as arrived"))
+        self.tolerance = self.get_parameter("tolerance").get_parameter_value().double_value
 
         ###
         ### SERVICES
@@ -105,12 +115,24 @@ class Waypoint(Node):
         # Issuing debug message
         # To run node in a mode that allows for viewing debug messages, run:
         # ros2 run turtle_control waypoint --ros-args -p frequency:=100.0 --log-level debug
+        
         move_msg = Twist()
+
+        # If the node is in the MOVING state, move the turtle to the next waypoint
         if self.state == state.MOVING:
             self.get_logger().debug('Issuing Command!')
-            move_msg = self.move_turtle(move_msg)
+            # If the new index is larger than the number of waypoints provided, reset back to 0
+            if self.target_point_index == len(self.point_list):
+                self.target_point_index = 0
+            # From waypoints list, obtain target point and navigate towards it
+            target_point = self.point_list[self.target_point_index]
+            # Get the Twist message to move the turtle to the target waypoint
+            move_msg = self.navigate_turtle(move_msg, target_point)
+
+        # If the node is in the STOPPED state, keep it in place
         elif self.state == state.STOPPED:
             move_msg = self.move_turtle(move_msg, 0.0)
+
         self.pub_cmdvel.publish(move_msg)
 
 
@@ -139,6 +161,8 @@ class Waypoint(Node):
     # Example code to run for providing waypoints:
     # ros2 service call /load turtle_interfaces/srv/Waypoints "{points: [{x: 8.2, y: 5.0, z: 0.0}, {x: 4.0, y: 3.0, z: 0.0}, {x: 3.2, y: 9.4, z: 0.0}]}"
     async def waypoints_callback(self, request, response):
+        # Save the list of waypoints
+        self.point_list = request.points
         # Total distance travelled
         distance = 0.0
         # Reset the turtle and turn its pen off immediately
@@ -174,8 +198,6 @@ class Waypoint(Node):
         self.req_repos.y = request.points[0].y
         self.req_repos.theta = 0.0
         await self.cli_2.call_async(self.req_repos)
-        # TEST THETA
-        self.next_theta(self.recent_x, self.recent_y, request.points[1].x, request.points[1].y)
         # Set node state to STOPPED
         self.state = state.STOPPED
         # Responds to client with total distance of waypoints
@@ -225,38 +247,64 @@ class Waypoint(Node):
         delt_x = end_x - start_x
         delt_y = end_y - start_y
         theta = math.atan2(delt_y, delt_x)
-        self.get_logger().info('theta: "%s"' % theta)
+        self.get_logger().info('targ theta: "%s"' % theta)
+        self.get_logger().info('curr theta: "%s"' % self.recent_theta)
         return theta
     
     # Function that returns a bool on whether the a given coord is within a certain radius of another given coord
-    def is_near(self, start_x, start_y, end_x, end_y, rad=0.3):
+    def is_near(self, start_x, start_y, end_x, end_y, rad):
         dist = math.sqrt((start_x - end_x)**2 + (start_y - end_y)**2)
         return dist <= rad
     
     # Function that returns a Twist message for moving the turtle forward
-    def move_turtle(self, twist_msg, for_vel=2.0):
+    def move_turtle(self, twist_msg, for_vel=1.0):
         new_msg = twist_msg
         new_msg.linear.x = for_vel
         return new_msg
     
     # Function that returns a Twist message for and rotates the turtle
-    def rotate_turtle(self, twist_msg, ang_vel=1.0):
+    def rotate_turtle(self, twist_msg, ang_vel=0.5):
         new_msg = twist_msg
         new_msg.angular.z = ang_vel
         return new_msg
-    
-    # Function that 
-    def absolute_rotate(self, target_theta):
-        if self.theta != target_theta:
-            self.rotate_turtle()
-        # if self.Twist
 
-    # def navigate_turtle():
-    ## rotate
+    # Returns a Twist message that will guide the turtle towards the target point,
+    # whether it has reached, or is rotating or moving towards it
+    def navigate_turtle(self, twist_msg, point):
+        new_msg = twist_msg
+        
+        # When the turtle is at a waypoint
+        if self.turtle_mode == mode.REACHED:
+            self.get_logger().error('REACHED')
+            # Calculates the angle needed to face the target point
+            self.target_theta = self.next_theta(self.recent_x, self.recent_y, point.x, point.y)
+            # Switch to ROTATING mode
+            self.turtle_mode = mode.ROTATING
 
-    ## translate
-
-    ## reached
+        # When the turtle is rotating itself at the start point
+        elif self.turtle_mode == mode.ROTATING:
+            self.get_logger().error('ROTATING')
+            self.get_logger().info('diff theta: "%s"' % abs(self.recent_theta - self.target_theta))
+            # If the turtle is facing the target point (or close enough to that), switch to TRANSLATING mode
+            if abs(self.recent_theta - self.target_theta) <= 0.01:
+                self.turtle_mode = mode.TRANSLATING
+            # Else, rotate turtle towards target point
+            else:
+                new_msg = self.rotate_turtle(new_msg)
+        
+        # When the turtle is moving forward to the target point
+        elif self.turtle_mode == mode.TRANSLATING:
+            self.get_logger().error('TRANSLATING')
+            # If the turtle is near the target point, switch to REACHED mode
+            if self.is_near(self.recent_x, self.recent_y, point.x, point.y, self.tolerance):
+                self.turtle_mode = mode.REACHED
+                # Change point index so that navigate_turtle can move towards the next point
+                self.target_point_index += 1
+            # Else, move forward towards the target point
+            else:
+                new_msg = self.move_turtle(new_msg)
+        
+        return new_msg
             
 
 def main(args=None):
