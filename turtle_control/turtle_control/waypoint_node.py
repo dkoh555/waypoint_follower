@@ -193,6 +193,11 @@ class Waypoint(Node):
         theta = math.atan2(delt_y, delt_x)
         self.get_logger().info('theta: "%s"' % theta)
         return theta
+    
+    # Function that returns a bool on whether the a given coord is within a certain radius of another given coord
+    def is_near(self, start_x, start_y, end_x, end_y, rad=0.3):
+        dist = math.sqrt((start_x - end_x)**2 + (start_y - end_y)**2)
+        return dist <= rad
 
     # Calls a service to toggle the pen of the turtle on/off
     # To turn the pen off, you can run the following command:
