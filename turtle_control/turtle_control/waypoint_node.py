@@ -181,6 +181,17 @@ class Waypoint(Node):
             await self.cli_2.call_async(self.req_repos)
         # Turn the pen off
         await self.pen_off(True)
+
+    # Calls a service to toggle the pen of the turtle on/off
+    # To turn the pen off, you can run the following command:
+    # ros2 service call /turtle1/set_pen turtlesim/srv/SetPen "{r: 255, g: 255, b: 255, width: 3, 'off': 1}"
+    async def pen_off(self, pen_off):
+        self.req_pen.r = 255
+        self.req_pen.g = 255
+        self.req_pen.b = 255
+        self.req_pen.width = 3
+        self.req_pen.off = pen_off
+        await self.cli_3.call_async(self.req_pen)
         
     ###
     ### TURTLE WAYPOINT NAVIGATION
@@ -198,17 +209,6 @@ class Waypoint(Node):
     def is_near(self, start_x, start_y, end_x, end_y, rad=0.3):
         dist = math.sqrt((start_x - end_x)**2 + (start_y - end_y)**2)
         return dist <= rad
-
-    # Calls a service to toggle the pen of the turtle on/off
-    # To turn the pen off, you can run the following command:
-    # ros2 service call /turtle1/set_pen turtlesim/srv/SetPen "{r: 255, g: 255, b: 255, width: 3, 'off': 1}"
-    async def pen_off(self, pen_off):
-        self.req_pen.r = 255
-        self.req_pen.g = 255
-        self.req_pen.b = 255
-        self.req_pen.width = 3
-        self.req_pen.off = pen_off
-        await self.cli_3.call_async(self.req_pen)
 
 def main(args=None):
     rclpy.init(args=args)
