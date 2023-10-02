@@ -1,0 +1,3 @@
+int64 complete_loops
+float64 actual_distance
+float64 error

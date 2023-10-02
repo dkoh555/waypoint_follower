@@ -20,6 +20,7 @@ from geometry_msgs.msg import Twist
 from rcl_interfaces.msg import ParameterDescriptor
 from enum import Enum
 from turtle_interfaces.srv import Waypoints
+from turtle_interfaces.msg import ErrorMetric
 from turtlesim.srv import TeleportAbsolute, SetPen
 from turtlesim.msg import Pose
 import math
@@ -91,6 +92,8 @@ class Waypoint(Node):
         ###
         # Create publisher to move the turtle
         self.pub_cmdvel = self.create_publisher(Twist, 'turtle1/cmd_vel', 10)
+        # Create publisher to send out ErrorMetric messages
+        self.pub_err = self.create_publisher(ErrorMetric, '/loop_metrics', 10)
 
         ###
         ### SUBSCRIBERS
@@ -108,11 +111,16 @@ class Waypoint(Node):
         self.timer = self.create_timer(timer_period, self.timer_callback, callback_group=self.cbgroup)
 
     def init_var(self):
+        self.recent_x = 0.0
+        self.recent_y = 0.0
         self.point_list = None
         self.target_point_index = 1
         self.target_theta = None
         self.state = state.STOPPED
         self.turtle_mode = mode.REACHED
+        self.pred_distance = 0.0
+        self.actual_distance = 0.0
+        self.complete_loops = 0
 
     def timer_callback(self):
         
@@ -126,8 +134,14 @@ class Waypoint(Node):
             self.get_logger().debug('Issuing Command!')
 
             # If the new index is larger than the number of waypoints provided, reset back to 0
+            # AKA when the turtle complete a cyle of waypoints, repeat it
             if self.target_point_index == len(self.point_list):
                 self.target_point_index = 0
+                self.complete_loops += 1
+
+            # As the turtle is moving, keep track of its distance travelled
+            self.track_distance()    
+
             # From waypoints list, obtain target point and navigate towards it
             target_point = self.point_list[self.target_point_index]
             # Get the Twist message to move the turtle to the target waypoint
@@ -141,7 +155,10 @@ class Waypoint(Node):
 
 
     # Takes note of most recent x & y coord from the pose topic
+    # And adds the difference between current and new coord to the acutal distance travelled
     def sub_pos_callback(self, msg):
+        self.old_x = self.recent_x
+        self.old_y = self.recent_y
         self.recent_x = msg.x
         self.recent_y = msg.y
         self.recent_theta = msg.theta
@@ -161,6 +178,10 @@ class Waypoint(Node):
                 self.get_logger().error('No waypoints loaded. Load them with the "load" service.')
                 self.get_logger().error('Staying in STOPPED state.')
                 self.state = state.STOPPED
+            elif len(self.point_list) == 1:
+                self.get_logger().error('Only one waypoints loaded. Unable to move to different waypoints.')
+                self.get_logger().error('Staying in STOPPED state.')
+                self.state = state.STOPPED
             else:
                 self.state = state.MOVING
 
@@ -176,23 +197,26 @@ class Waypoint(Node):
         # Save the list of waypoints
         self.point_list = request.points
         self.get_logger().info('Loading waypoints')
-        # Total distance travelled
-        distance = 0.0
+        # Total predicted distance to travel the entire cycle of waypoints
+        self.pred_distance = 0.0
         # Reset the turtle and turn its pen off immediately
         await self.cli_1.call_async(self.req_reset)
         await self.pen_off(True)
-        # Taking note of turtle's initial reset coord
-        orig_x = self.recent_x
-        orig_y = self.recent_y
-        pos_x = orig_x
-        pos_y = orig_y
         # Move the turtle around, drawing the X's, and calculating the total distance for the entire 'cycle'
+        is_initial_point = True
         for i in request.points:
             # Submit client request to move turtlesim to new position
             self.req_repos.x = i.x
             self.req_repos.y = i.y
             self.req_repos.theta = 0.0
             await self.cli_2.call_async(self.req_repos)
+            # If it's the initial/starting waypoint, take special note of its coord
+            if is_initial_point:
+                orig_x = self.recent_x
+                orig_y = self.recent_y
+                pos_x = orig_x
+                pos_y = orig_y
+                is_initial_point = False
             # Draw the X around the current position
             await self.draw_x(i.x, i.y)
             # Find the distance between the curr pos and the new position
@@ -201,9 +225,9 @@ class Waypoint(Node):
             pos_x = i.x
             pos_y = i.y
             # Add to the total distance travelled
-            distance += diff
+            self.pred_distance += diff
         diff = math.sqrt((pos_x - orig_x)**2 + (pos_y - orig_y)**2) # Adding the distance from the last point to the starting one
-        distance += diff
+        self.pred_distance += diff
         # Repos the turtle to its first waypoint
         self.req_repos.x = request.points[0].x
         self.req_repos.y = request.points[0].y
@@ -212,7 +236,7 @@ class Waypoint(Node):
         # Set node state to STOPPED
         self.state = state.STOPPED
         # Responds to client with total distance of waypoints
-        response.distance = distance
+        response.distance = self.pred_distance
         return response
     
     ###
@@ -294,6 +318,10 @@ class Waypoint(Node):
             self.target_theta = self.next_theta(self.recent_x, self.recent_y, point.x, point.y)
             # Switch to ROTATING mode
             self.turtle_mode = mode.ROTATING
+            # If turtle just finished going through a cycle of waypoints,
+            # publish ErrorMetric msg to the appropriate topic when that happens
+            if self.target_point_index == 1 and self.complete_loops > 0:
+                self.publish_errormsg()
 
         # When the turtle is rotating itself at the start point
         elif self.turtle_mode == mode.ROTATING:
@@ -319,6 +347,29 @@ class Waypoint(Node):
                 new_msg = self.move_turtle(new_msg)
         
         return new_msg
+    
+    ###
+    ### ERROR METRIC MESSAGE
+    ###
+    # Function calculates the tracks the totla distance travelled by the turtle
+    def track_distance(self):
+        diff = math.sqrt((self.old_x - self.recent_x)**2 + (self.old_y - self.recent_y)**2)
+        self.actual_distance += diff
+
+    # Function returns the error between calculated straight line distance and actual distance travelled
+    def error_distance(self):
+        err = ((abs(self.actual_distance - self.pred_distance))/self.actual_distance) * 100
+        return err
+
+    # Function publishes the Error Metric on the appropriate topic
+    # Also resets the actual distance travelled
+    def publish_errormsg(self):
+        msg = ErrorMetric()
+        msg.complete_loops = self.complete_loops
+        msg.actual_distance = self.actual_distance
+        msg.error = self.error_distance()
+        self.pub_err.publish(msg)
+        self.actual_distance = 0.0
             
 
 def main(args=None):
