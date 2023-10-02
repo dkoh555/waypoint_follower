@@ -43,11 +43,7 @@ class Waypoint(Node):
     def __init__(self):
         super().__init__('waypoint')
         # Initalize variables
-        self.point_list = None
-        self.target_point_index = 1
-        self.target_theta = None
-        self.state = state.STOPPED
-        self.turtle_mode = mode.REACHED
+        self.init_var()
         # This node will use Reentrant Callback Groups for nested services
         self.cbgroup = ReentrantCallbackGroup()
 
@@ -111,6 +107,13 @@ class Waypoint(Node):
         # create timer and timer callback for debug message issuing
         self.timer = self.create_timer(timer_period, self.timer_callback, callback_group=self.cbgroup)
 
+    def init_var(self):
+        self.point_list = None
+        self.target_point_index = 1
+        self.target_theta = None
+        self.state = state.STOPPED
+        self.turtle_mode = mode.REACHED
+
     def timer_callback(self):
         # Issuing debug message
         # To run node in a mode that allows for viewing debug messages, run:
@@ -161,6 +164,8 @@ class Waypoint(Node):
     # Example code to run for providing waypoints:
     # ros2 service call /load turtle_interfaces/srv/Waypoints "{points: [{x: 8.2, y: 5.0, z: 0.0}, {x: 4.0, y: 3.0, z: 0.0}, {x: 3.2, y: 9.4, z: 0.0}]}"
     async def waypoints_callback(self, request, response):
+        # Reinitialize variables
+        self.init_var()
         # Save the list of waypoints
         self.point_list = request.points
         # Total distance travelled
@@ -257,10 +262,16 @@ class Waypoint(Node):
         return dist <= rad
     
     # Function that returns a Twist message for moving the turtle forward
-    def move_turtle(self, twist_msg, for_vel=1.0):
+    def move_turtle(self, twist_msg, for_vel=2.0):
         new_msg = twist_msg
         new_msg.linear.x = for_vel
         return new_msg
+    
+    # Function that returns a boolean stating whether it is best to rotate clockwise from a starting theta to reach a target theta
+    def is_clockwise_best(self, theta_1, theta_2):
+        diff_cw = (theta_1 - theta_2) % (2 * math.pi)
+        diff_ccw = (theta_2 - theta_1) % (2 * math.pi)
+        return diff_cw <= diff_ccw
     
     # Function that returns a Twist message for and rotates the turtle
     def rotate_turtle(self, twist_msg, ang_vel=0.5):
@@ -290,7 +301,10 @@ class Waypoint(Node):
                 self.turtle_mode = mode.TRANSLATING
             # Else, rotate turtle towards target point
             else:
-                new_msg = self.rotate_turtle(new_msg)
+                ang_vel = 0.75
+                if self.is_clockwise_best(self.recent_theta, self.target_theta):
+                    ang_vel = ang_vel * -1.0
+                new_msg = self.rotate_turtle(new_msg, ang_vel)
         
         # When the turtle is moving forward to the target point
         elif self.turtle_mode == mode.TRANSLATING:
