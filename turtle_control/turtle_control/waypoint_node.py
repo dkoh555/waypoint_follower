@@ -16,6 +16,7 @@ PARAMETERS:
 import rclpy
 from rclpy.node import Node
 from std_srvs.srv import Empty # Imported the service std_srvs/srv/Empty
+from geometry_msgs.msg import Twist
 from rcl_interfaces.msg import ParameterDescriptor
 from enum import Enum
 from turtle_interfaces.srv import Waypoints
@@ -30,6 +31,12 @@ class state(Enum):
     MOVING = 0
     STOPPED = 1
 
+# Enum class that indicates the different modes of the turtle: ROTATING, TRANSLATING, REACHED
+class mode(Enum):
+    ROTATING = 0
+    TRANSLATING = 1
+    REACHED = 2
+
 # The Waypoint class that is a publisher node
 class Waypoint(Node):
 
@@ -38,6 +45,7 @@ class Waypoint(Node):
         # Initalize variables
         self.pont_list = None
         self.state = state.STOPPED
+        self.turtle_mode = mode.ROTATING
         # This node will use Reentrant Callback Groups for nested services
         self.cbgroup = ReentrantCallbackGroup()
         # declare and get the frequency parameter and set default value
@@ -73,12 +81,17 @@ class Waypoint(Node):
         self.req_pen = SetPen.Request()
 
         ###
+        ### PUBLISHERS
+        ###
+        # Create publisher to move the turtle
+        self.pub_cmdvel = self.create_publisher(Twist, 'turtle1/cmd_vel', 10)
+
+        ###
         ### SUBSCRIBERS
         ###
         # Create subscriber to get the current position of the turtle
         self.sub_pos = self.create_subscription(Pose, 'turtle1/pose', self.sub_pos_callback, 10)
         self.sub_pos
-
 
         ###
         ### TIMER
@@ -92,13 +105,20 @@ class Waypoint(Node):
         # Issuing debug message
         # To run node in a mode that allows for viewing debug messages, run:
         # ros2 run turtle_control waypoint --ros-args -p frequency:=100.0 --log-level debug
+        move_msg = Twist()
         if self.state == state.MOVING:
             self.get_logger().debug('Issuing Command!')
+            move_msg = self.move_turtle(move_msg)
+        elif self.state == state.STOPPED:
+            move_msg = self.move_turtle(move_msg, 0.0)
+        self.pub_cmdvel.publish(move_msg)
+
 
     # Takes note of most recent x & y coord from the pose topic
     def sub_pos_callback(self, msg):
         self.recent_x = msg.x
         self.recent_y = msg.y
+        self.recent_theta = msg.theta
 
     # Test the callback with the following command:
     # ros2 service call /toggle std_srvs/srv/Empty "{}"
@@ -157,11 +177,14 @@ class Waypoint(Node):
         # TEST THETA
         self.next_theta(self.recent_x, self.recent_y, request.points[1].x, request.points[1].y)
         # Set node state to STOPPED
-        self.state = state.MOVING
+        self.state = state.STOPPED
         # Responds to client with total distance of waypoints
         response.distance = distance
         return response
     
+    ###
+    ### WAYPOINT MARKING
+    ###
     # Draws an X around the provided coordinate by calling the repositioning and set pen services
     async def draw_x(self, x_origin, y_origin):
         # Initialize an array of the coord of each vertices of the X
@@ -209,6 +232,32 @@ class Waypoint(Node):
     def is_near(self, start_x, start_y, end_x, end_y, rad=0.3):
         dist = math.sqrt((start_x - end_x)**2 + (start_y - end_y)**2)
         return dist <= rad
+    
+    # Function that returns a Twist message for moving the turtle forward
+    def move_turtle(self, twist_msg, for_vel=2.0):
+        new_msg = twist_msg
+        new_msg.linear.x = for_vel
+        return new_msg
+    
+    # Function that returns a Twist message for and rotates the turtle
+    def rotate_turtle(self, twist_msg, ang_vel=1.0):
+        new_msg = twist_msg
+        new_msg.angular.z = ang_vel
+        return new_msg
+    
+    # Function that 
+    def absolute_rotate(self, target_theta):
+        if self.theta != target_theta:
+            self.rotate_turtle()
+        # if self.Twist
+
+    # def navigate_turtle():
+    ## rotate
+
+    ## translate
+
+    ## reached
+            
 
 def main(args=None):
     rclpy.init(args=args)
