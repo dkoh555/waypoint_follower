@@ -122,7 +122,7 @@ class Waypoint(Node):
         self.actual_distance = 0.0
         self.complete_loops = 0
 
-    def timer_callback(self):
+    async def timer_callback(self):
         
         move_msg = Twist()
 
@@ -145,7 +145,7 @@ class Waypoint(Node):
             # From waypoints list, obtain target point and navigate towards it
             target_point = self.point_list[self.target_point_index]
             # Get the Twist message to move the turtle to the target waypoint
-            move_msg = self.navigate_turtle(move_msg, target_point)
+            move_msg = await self.navigate_turtle(move_msg, target_point)
 
         # If the node is in the STOPPED state, keep it in place
         elif self.state == state.STOPPED:
@@ -301,15 +301,16 @@ class Waypoint(Node):
         diff_ccw = (theta_2 - theta_1) % (2 * math.pi)
         return diff_cw <= diff_ccw
     
-    # Function that returns a Twist message for and rotates the turtle
-    def rotate_turtle(self, twist_msg, ang_vel=0.5):
-        new_msg = twist_msg
-        new_msg.angular.z = ang_vel
-        return new_msg
+    # Function that calls a service to adjust the pose of the turtle so that it rotates to a desired angle in its current pos
+    async def rotate_turtle(self, target_theta):
+        self.req_repos.x = self.recent_x
+        self.req_repos.y = self.recent_y
+        self.req_repos.theta = target_theta
+        await self.cli_2.call_async(self.req_repos)
 
     # Returns a Twist message that will guide the turtle towards the target point,
     # whether it has reached, or is rotating or moving towards it
-    def navigate_turtle(self, twist_msg, point):
+    async def navigate_turtle(self, twist_msg, point):
         new_msg = twist_msg
         
         # When the turtle is at a waypoint
@@ -325,16 +326,10 @@ class Waypoint(Node):
 
         # When the turtle is rotating itself at the start point
         elif self.turtle_mode == mode.ROTATING:
-            # If the turtle is facing the target point (or close enough to that), switch to TRANSLATING mode
-            if abs(self.recent_theta - self.target_theta) <= 0.01:
-                self.turtle_mode = mode.TRANSLATING
-            # Else, rotate turtle towards target point
-            else:
-                ang_vel = 0.75
-                if self.is_clockwise_best(self.recent_theta, self.target_theta):
-                    ang_vel = ang_vel * -1.0
-                new_msg = self.rotate_turtle(new_msg, ang_vel)
-        
+            # Readjust turtle orientation to face next waypoint, then switch to TRANSLATING mode
+            await self.rotate_turtle(self.target_theta)
+            self.turtle_mode = mode.TRANSLATING
+
         # When the turtle is moving forward to the target point
         elif self.turtle_mode == mode.TRANSLATING:
             # If the turtle is near the target point, switch to REACHED mode
