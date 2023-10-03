@@ -212,8 +212,8 @@ class Waypoint(Node):
             await self.cli_2.call_async(self.req_repos)
             # If it's the initial/starting waypoint, take special note of its coord
             if is_initial_point:
-                orig_x = self.recent_x
-                orig_y = self.recent_y
+                orig_x = i.x
+                orig_y = i.y
                 pos_x = orig_x
                 pos_y = orig_y
                 is_initial_point = False
@@ -347,6 +347,7 @@ class Waypoint(Node):
     ### ERROR METRIC MESSAGE
     ###
     # Function calculates the tracks the totla distance travelled by the turtle
+    # WIP TRACK DISTANCE IS INACCURATE
     def track_distance(self):
         diff = math.sqrt((self.old_x - self.recent_x)**2 + (self.old_y - self.recent_y)**2)
         self.actual_distance += diff
@@ -364,7 +365,7 @@ class Waypoint(Node):
         msg.actual_distance = self.actual_distance
         msg.error = self.error_distance()
         self.pub_err.publish(msg)
-        self.actual_distance = 0.0
+        self.pred_distance += self.pred_distance/self.complete_loops
             
 
 def main(args=None):
