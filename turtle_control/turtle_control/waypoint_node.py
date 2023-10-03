@@ -27,20 +27,26 @@ import math
 import asyncio
 from rclpy.callback_groups import ReentrantCallbackGroup
 
-# Enum class that indicates the different states of the node: MOVING, STOPPED
 class state(Enum):
+    """ Current state of the system (waypoint node).
+        Determines what movement commands are published to the turtle,
+        whether it is MOVING or STOPPED
+    """
     MOVING = 0
     STOPPED = 1
 
-# Enum class that indicates the different modes of the turtle: ROTATING, TRANSLATING, REACHED
 class mode(Enum):
+    """ Current stage the turtle should be in to move to the next waypoint.
+        Determines what movement commands are published to the turtle,
+        whether it is ROTATING, TRANSLATING, or REACHED
+    """
     ROTATING = 0
     TRANSLATING = 1
     REACHED = 2
 
-# The Waypoint class that is a publisher node
 class Waypoint(Node):
-
+    """ Publishes geometry_msgs/Twist commands at a fixed rate for the turtle
+    """
     def __init__(self):
         super().__init__('waypoint')
         # Initalize variables
@@ -71,7 +77,7 @@ class Waypoint(Node):
         ###
         ### CLIENTS
         ###
-        # Create client for reseting the turtlesim
+        # Create client for resetting the turtlesim
         self.cli_1 = self.create_client(Empty, 'reset', callback_group=self.cbgroup)
         while not self.cli_1.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
@@ -111,6 +117,8 @@ class Waypoint(Node):
         self.timer = self.create_timer(timer_period, self.timer_callback, callback_group=self.cbgroup)
 
     def init_var(self):
+        """ Initializes all of the waypoint node's variables.
+        """
         self.recent_x = 0.0
         self.recent_y = 0.0
         self.point_list = None
@@ -123,14 +131,14 @@ class Waypoint(Node):
         self.complete_loops = 0
 
     def timer_callback(self):
-        
-        move_msg = Twist()
+        """ Timer callback for the waypoint node.
 
+            Depending on whether the node state is MOVING or STOPPED, provides a geometry_msgs/Twist
+            that moves the turtle through its different provided waypoints or keeps it in place respectively
+        """
+        move_msg = Twist()
         # If the node is in the MOVING state, move the turtle to the next waypoint
         if self.state == state.MOVING:
-            # Issuing debug message
-            # To run node in a mode that allows for viewing debug messages, run:
-            # ros2 run turtle_control waypoint --ros-args -p frequency:=100.0 --log-level debug
             self.get_logger().debug('Issuing Command!')
 
             # If the new index is larger than the number of waypoints provided, reset back to 0
@@ -138,9 +146,6 @@ class Waypoint(Node):
             if self.target_point_index == len(self.point_list):
                 self.target_point_index = 0
                 self.complete_loops += 1
-
-            # # As the turtle is moving, keep track of its distance travelled
-            # self.track_distance()    
 
             # From waypoints list, obtain target point and navigate towards it
             target_point = self.point_list[self.target_point_index]
@@ -154,9 +159,16 @@ class Waypoint(Node):
         self.pub_cmdvel.publish(move_msg)
 
 
-    # Takes note of most recent x & y coord from the pose topic
-    # And adds the difference between current and new coord to the acutal distance travelled
     def sub_pos_callback(self, msg):
+        """ Callback function for the turtle1/pose topic.
+
+            Receives and takes note of the turtle's current position,
+            also tracks the distance travelled by the turtles when the nodes is in the MOVING state
+            
+            Args:
+                msg (turtlesim/Pose): A message that contains a Pose message, containing the
+                    current x, y, theta, and linear and angular velocities of the turtle
+        """
         self.old_x = self.recent_x
         self.old_y = self.recent_y
         self.recent_x = msg.x
@@ -169,9 +181,20 @@ class Waypoint(Node):
 
         self.recent_theta = msg.theta
 
-    # Test the callback with the following command:
-    # ros2 service call /toggle std_srvs/srv/Empty "{}"
     def empty_callback(self, request, response):
+        """ Callback function for the toggle service.
+
+            When provided with a std_srvs/Empty message,
+            the node will switch between MOVING and STOPPED states
+            
+            Args:
+                request (Empty): A message that contains nothing
+
+                response (Empty): The response object
+
+            Returns:
+                Empty: Contains nothing
+        """
         self.get_logger().info('Incoming Request!')
 
         if self.state == state.MOVING:
@@ -193,11 +216,24 @@ class Waypoint(Node):
 
         return response
     
-    # When receives a number waypoints via service, it will then submit a client request
-    # to reset turtlesim, then another to reposition the turtle to each waypoint
-    # Example code to run for providing waypoints:
-    # ros2 service call /load turtle_interfaces/srv/Waypoints "{points: [{x: 8.2, y: 5.0, z: 0.0}, {x: 4.0, y: 3.0, z: 0.0}, {x: 3.2, y: 9.4, z: 0.0}]}"
     async def waypoints_callback(self, request, response):
+        """ Callback function for the load service.
+
+            When provided with an array of geometry_msgs/Points, the turtle will 'draw' X's at each point,
+            reposition itself at the first point in said array, and then returns the predicted distance the
+            turtle would travel to go through one cycle of the provided list of points.
+            
+            Args:
+                request (geometry_msgs/Point[]): An array containing geometry_msgs/Point,
+                    which then contain x, y, z fields that correspond with coordinates of
+                    each point - because the functions use 2D coords the z field is ignored
+
+                response (float64): The response object
+
+            Returns:
+                float64: The predicted straight-line distance the turtle would travel to
+                    go through a cycle of the given points
+        """
         # Reinitialize variables
         self.init_var()
         # Save the list of waypoints
@@ -246,10 +282,17 @@ class Waypoint(Node):
         return response
     
     ###
-    ### WAYPOINT MARKING
+    ### WAYPOINT MARKING FUNCTIONS
     ###
-    # Draws an X around the provided coordinate by calling the repositioning and set pen services
+
     async def draw_x(self, x_origin, y_origin):
+        """ Service client for the turtle1/teleport_absolute service that uses 
+            the turtle to 'draw' and X at a given set of coordinates.
+
+            Args:
+                x_origin (float): x-coord of the X's centerpoint
+                y_origin (float): y-coord of the X's centerpoint
+        """
         # Initialize an array of the coord of each vertices of the X
         size = 0.35
         x_vert_array = [x_origin-size, x_origin+size, x_origin-size, x_origin+size]
@@ -268,10 +311,12 @@ class Waypoint(Node):
         # Turn the pen off
         await self.pen_off(True)
 
-    # Calls a service to toggle the pen of the turtle on/off
-    # To turn the pen off, you can run the following command:
-    # ros2 service call /turtle1/set_pen turtlesim/srv/SetPen "{r: 255, g: 255, b: 255, width: 3, 'off': 1}"
     async def pen_off(self, pen_off):
+        """ Service client for the turtle1/set_pen service that turns the pen on/off depending on the function input.
+
+            Args:
+                pen_off (boolean): Whether the pen should turned off
+        """
         self.req_pen.r = 255
         self.req_pen.g = 255
         self.req_pen.b = 255
@@ -280,42 +325,95 @@ class Waypoint(Node):
         await self.cli_3.call_async(self.req_pen)
         
     ###
-    ### TURTLE WAYPOINT NAVIGATION
+    ### TURTLE WAYPOINT NAVIGATION FUNCTIONS
     ###
-    # Function that returns the correct theta (/pose) from starting waypoint to the target
-    # 0.0 theta means the turtle is facing westward/the right
+
     def next_theta(self, start_x, start_y, end_x, end_y):
+        """ Returns a float that indicates the angle a given end point is relative to a given starting point.
+            (This value is within [-pi, pi])
+
+            Args:
+                start_x (float): The current x-coord
+                start_y (float): The current y-coord
+                end_x (float): The target x-coord
+                end_y (float): The target y-coord
+            
+            Returns:
+                Float: The angle between the starting and target points are
+        """
         delt_x = end_x - start_x
         delt_y = end_y - start_y
         theta = math.atan2(delt_y, delt_x)
         return theta
     
-    # Function that returns a bool on whether the a given coord is within a certain radius of another given coord
     def is_near(self, start_x, start_y, end_x, end_y, rad):
+        """ Returns a boolean that indicates if a set of given 2D coordinates are within a given radius of another set of coordinates.
+
+            Args:
+                start_x (float): The current x-coord
+                start_y (float): The current y-coord
+                end_x (float): The target x-coord
+                end_y (float): The target y-coord
+                rad (float): The radius the two points have to be within of each other to be marked as 'near' each other
+            
+            Returns:
+                Bool: States whether the two points are near each other is True/False
+        """
         dist = math.sqrt((start_x - end_x)**2 + (start_y - end_y)**2)
         return dist <= rad
     
-    # Function that returns a Twist message for moving the turtle forward
     def move_turtle(self, twist_msg, for_vel=2.0):
+        """ Returns a geometry_msgs/Twist message that moves the turtle forward at a given velocity.
+
+            Args:
+                twist_msg (geometry_msgs/Twist): The initial movement command of the turtle, corresponding with linear & angular velocity
+                for_vel (float): The desired linear velocity of the turtle
+            
+            Returns:
+                geometry_msgs/Twist: The new movement command for the turtle to move towards the target waypoint
+        """
         new_msg = twist_msg
         new_msg.linear.x = for_vel
         return new_msg
     
-    # Function that returns a boolean stating whether it is best to rotate clockwise from a starting theta to reach a target theta
     def is_clockwise_best(self, theta_1, theta_2):
+        """ Returns a boolean that indicates if it's faster to rotate clockwise to reach a given target theta from given starting theta.
+
+            Args:
+                theta_1 (float): The initial theta
+                theta_2 (float): The target theta
+            
+            Returns:
+                Bool: States whether moving clockwise is the fastest path is True/False
+        """
         diff_cw = (theta_1 - theta_2) % (2 * math.pi)
         diff_ccw = (theta_2 - theta_1) % (2 * math.pi)
         return diff_cw <= diff_ccw
     
-    # Function that returns a Twist message for and rotates the turtle
     def rotate_turtle(self, twist_msg, ang_vel=0.5):
+        """ Returns a geometry_msgs/Twist message that rotates the turtle at a given angular velocity.
+
+            Args:
+                twist_msg (geometry_msgs/Twist): The initial movement command of the turtle, corresponding with linear & angular velocity
+                ang_vel (float): The desired angular velocity of the turtle
+            
+            Returns:
+                geometry_msgs/Twist: The new movement command for the turtle to move towards the target waypoint
+        """
         new_msg = twist_msg
         new_msg.angular.z = ang_vel
         return new_msg
 
-    # Returns a Twist message that will guide the turtle towards the target point,
-    # whether it has reached, or is rotating or moving towards it
     def navigate_turtle(self, twist_msg, point):
+        """ Returns geometry_msgs/Twist message to guide turtle to a given waypoint from its current position.
+
+            Args:
+                twist_msg (geometry_msgs/Twist): The initial movement command of the turtle, corresponding with linear & angular velocity
+                point (geometry_msgs/Point): The current target waypoint the turtle is moving towards
+            
+            Returns:
+                geometry_msgs/Twist: The new movement command for the turtle to move towards the target waypoint
+        """
         new_msg = twist_msg
         
         # When the turtle is at a waypoint
@@ -370,17 +468,22 @@ class Waypoint(Node):
         return new_msg
     
     ###
-    ### ERROR METRIC MESSAGE
+    ### ERROR METRIC MESSAGE FUNCTIONS
     ###
 
-    # Function returns the error between calculated straight line distance and actual distance travelled
     def error_distance(self):
+        """ Returns the percentage error between actual distance travelled and predicted distance.
+        """
         err = ((abs(self.actual_distance - self.pred_distance))/self.actual_distance) * 100
         return err
 
-    # Function publishes the Error Metric on the appropriate topic
-    # Also resets the actual distance travelled
     def publish_errormsg(self):
+        """ Publishes turtle_interfaces/ErrorMetric message when called.
+
+            Reports the number of cycles of the waypoints completed by the turtle,
+            the distance travelled by the turtle, and the percentage error between
+            distance travelled and predicted distance to be travelled.
+        """
         msg = ErrorMetric()
         msg.complete_loops = self.complete_loops
         msg.actual_distance = self.actual_distance
@@ -390,6 +493,8 @@ class Waypoint(Node):
             
 
 def main(args=None):
+    """ The main() function.
+    """
     rclpy.init(args=args)
 
     waypoint = Waypoint()
