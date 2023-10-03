@@ -1,21 +1,34 @@
 """
-???Publishes twist that will move a robot back and forth in the ${?} direction
-while randomly providing an angular velocity about the ${?}-axis.
+Takes in waypoints, marks them out in the turtlesim,
+and then publishes Twist messages to navigate the turtle through said waypoints.
 
-???PUBLISHERS:
-  + ${topic_name} (${message_type}) - The velocity of an erratic turtle path
+PUBLISHERS:
+    turtle1/cmd_vel (geometry_msgs/Twist) - Movement command to move the turtle
+    loop_metrics (turtle_interfaces/ErrorMetric) - Message that reports the number of loops completed by the turtle,
+        its distance travelled, and the percentage error between the actual and predicted distance travelled
 
-???SERVICES:
-  + ${topic_name} (${service_type}) - Position of the new turtle
+SUBSCRIBERS:
+    turtle1/pose (turtlesim/Pose) - Receives messages containing the most recent x, y, theta,
+        and linear and angular velocities of the turtle
+
+SERVICES:
+    toggle (std_srvs/Empty) - Signal to toggle node between MOVING and STOPPED states
+    load (turtle_interfaces/Waypoints) - The list of waypoints to draw out in turtlesim and navigate the turtle through
+
+CLIENTS:
+    reset (std_srvs/Empty) - To reset the turtlesim
+    turtle1/teleport_absolute (turtlesim/TeleportAbsolute) - To teleport the turtle
+    turtle1/set_pen (turtlesim/SetPen) - To set the color and width of the pen, as well toggle it on or off
 
 PARAMETERS:
-  + frequency (double) - Velocity driving the robot
+    frequency (double) - Frequence of the timer of this node
+    tolerance (double) - The radius of a waypoint the turtle can be in to be considered having reached that waypoint
 
 """
 
 import rclpy
 from rclpy.node import Node
-from std_srvs.srv import Empty # Imported the service std_srvs/srv/Empty
+from std_srvs.srv import Empty
 from geometry_msgs.msg import Twist
 from rcl_interfaces.msg import ParameterDescriptor
 from enum import Enum
@@ -99,7 +112,7 @@ class Waypoint(Node):
         # Create publisher to move the turtle
         self.pub_cmdvel = self.create_publisher(Twist, 'turtle1/cmd_vel', 10)
         # Create publisher to send out ErrorMetric messages
-        self.pub_err = self.create_publisher(ErrorMetric, '/loop_metrics', 10)
+        self.pub_err = self.create_publisher(ErrorMetric, 'loop_metrics', 10)
 
         ###
         ### SUBSCRIBERS
@@ -207,6 +220,7 @@ class Waypoint(Node):
                 self.get_logger().error('No waypoints loaded. Load them with the "load" service.')
                 self.get_logger().error('Staying in STOPPED state.')
                 self.state = state.STOPPED
+            # Similar applies if only one waypoint is loaded, then log an error message and keep node in STOPPED state
             elif len(self.point_list) == 1:
                 self.get_logger().error('Only one waypoints loaded. Unable to move to different waypoints.')
                 self.get_logger().error('Staying in STOPPED state.')
