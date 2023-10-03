@@ -139,8 +139,8 @@ class Waypoint(Node):
                 self.target_point_index = 0
                 self.complete_loops += 1
 
-            # As the turtle is moving, keep track of its distance travelled
-            self.track_distance()    
+            # # As the turtle is moving, keep track of its distance travelled
+            # self.track_distance()    
 
             # From waypoints list, obtain target point and navigate towards it
             target_point = self.point_list[self.target_point_index]
@@ -161,6 +161,12 @@ class Waypoint(Node):
         self.old_y = self.recent_y
         self.recent_x = msg.x
         self.recent_y = msg.y
+
+        # If node is in MOVING state, then add diff between old and new position to distance travelled
+        if self.state == state.MOVING:
+            diff = math.sqrt((self.old_x - self.recent_x)**2 + (self.old_y - self.recent_y)**2)
+            self.actual_distance += diff
+
         self.recent_theta = msg.theta
 
     # Test the callback with the following command:
@@ -348,9 +354,9 @@ class Waypoint(Node):
     ###
     # Function calculates the tracks the totla distance travelled by the turtle
     # WIP TRACK DISTANCE IS INACCURATE
-    def track_distance(self):
-        diff = math.sqrt((self.old_x - self.recent_x)**2 + (self.old_y - self.recent_y)**2)
-        self.actual_distance += diff
+    # def track_distance(self):
+    #     diff = math.sqrt((self.old_x - self.recent_x)**2 + (self.old_y - self.recent_y)**2)
+    #     self.actual_distance += diff
 
     # Function returns the error between calculated straight line distance and actual distance travelled
     def error_distance(self):
