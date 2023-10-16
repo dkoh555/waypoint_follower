@@ -5,7 +5,7 @@
   <version>0.0.0</version>
   <description>Controls a turtle in turtlesim</description>
   <maintainer email="damienkoh2025@u.northwestern.edu">damien</maintainer>
-  <license>TODO: License declaration</license>
+  <license>TODO: License declaration</license> # missing license declaration
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

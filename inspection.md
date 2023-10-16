@@ -8,18 +8,18 @@ Unless otherwise specified, list the command and all arguments that you passed t
 
 ## Repository Configuration
 1. The `crazy_turtle` git repository consists of the ROS 2 packages `crazy_turtle` and `crazy_turtle_interfaces`.
-2. The package `crazy_turtle` is a `python` package.
-2. The package `crazy_turtle_interfaces` is a `cmake` package.
+2. The package `crazy_turtle` is a `python` package. [ament_python]
+2. The package `crazy_turtle_interfaces` is a `cmake` package. [ament_cmake]
 
 
 ## Setup Instructions
-1. Build the workspace using `colcon build` so that it is unnecessary to rebuild when python files change.
-2. Initialize the ROS environment (i.e., set the necessary ROS environment variables) by executing `source /opt/ros/iron/setup.bash`
+1. Build the workspace using `colcon build` [[--symlink-install] so that it is unnecessary to rebuild when python files change.
+2. Initialize the ROS environment (i.e., set the necessary ROS environment variables) by executing `source /opt/ros/iron/setup.bash` [source the workspace setup]
 3. Make sure no other ROS nodes are running prior to starting by inspecting the results of `ros2 node list`.
 3. Run the launchfile `go_crazy_turtle.launch.xml` by executing `ros2 launch crazy_turtle go_crazy_turtle.launch.xml`
 4. When running you can see a visual depiction of the ROS graph using the `rqt_graph` command.
    The ROS graph, including all topics and node labels, looks like:
-   ![rosgraph](https://github.com/ME495-EmbeddedSystems/homework1-dkoh555/assets/107823507/9e913b66-cbcf-4efb-b353-ec7885740408)
+   ![rosgraph](https://github.com/ME495-EmbeddedSystems/homework1-dkoh555/assets/107823507/9e913b66-cbcf-4efb-b353-ec7885740408) [url should be relative]
 
 ## Runtime Information
 The `launchfile` from above should be running at all times when executing these commands.
@@ -28,14 +28,14 @@ If the nodes launched from the `launchfile` are not running, you will get incorr
 5. Use the ROS command `ros2 node list` to list all the nodes that are running.
    The output of the command looks like
    ```
-   damien@damien-xps:~/me495/hw_ros_ws$ ros2 node list
+   damien@damien-xps:~/me495/hw_ros_ws$ ros2 node list [this is the command not part of it's output]
    /mover
    /roving_turtle
    ```
 6. Use the ROS command `ros2 topic list` to list the topics
    The output of the command looks like
    ```
-   damien@damien-xps:~/me495/hw_ros_ws$ ros2 topic list
+   damien@damien-xps:~/me495/hw_ros_ws$ ros2 topic list [this is the command not part of its output]
    /parameter_events
    /rosout
    /turtle1/cmd_vel
@@ -49,7 +49,7 @@ If the nodes launched from the `launchfile` are not running, you will get incorr
 8. Use the ROS command `ros2 service list` to list the services.
    The output of the command looks like
    ```
-   damien@damien-xps:~/me495/hw_ros_ws$ ros2 service list
+   damien@damien-xps:~/me495/hw_ros_ws$ ros2 service list [...]
    /clear
    /kill
    /mover/describe_parameters
@@ -76,7 +76,7 @@ If the nodes launched from the `launchfile` are not running, you will get incorr
 
 10. Use the ROS command `ros2 param list` to list the parameters of all running nodes
    ```
-   damien@damien-xps:~/me495/hw_ros_ws$ ros2 param list
+   damien@damien-xps:~/me495/hw_ros_ws$ ros2 param list [...]
    /mover:
       use_sim_time
       velocity
@@ -95,7 +95,7 @@ If the nodes launched from the `launchfile` are not running, you will get incorr
 
 11. Use the ROS command `ros2 param describe /mover velocity` to get information about the `/mover` `velocity` parameter, including its type, description, and constraints
    ```
-   damien@damien-xps:~/me495/hw_ros_ws$ ros2 param describe /mover velocity
+   damien@damien-xps:~/me495/hw_ros_ws$ ros2 param describe /mover velocity [...]
    Parameter name: velocity
       Type: double
       Description: The velocity of the turtle

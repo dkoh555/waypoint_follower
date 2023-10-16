@@ -4,10 +4,10 @@ Publishes twist that will move a robot back and forth in the x direction
 while randomly providing an angular velocity about the z-axis.
 
 PUBLISHERS:
-  + /turtle1/cmd_vel (geometry_msgs/msg/Twist) - The velocity of an erratic turtle path
+  + /turtle1/cmd_vel (geometry_msgs/msg/Twist) - The velocity of an erratic turtle path [this publishes on cmd_vel not /turtle1/cmd_vel]
 
 SERVICES:
-  + /switch (crazy_turtle_interfaces/srv/Switch) - Position of the new turtle
+  + /switch (crazy_turtle_interfaces/srv/Switch) - Position of the new turtle [service is switch not /switch]
 
 PARAMETERS:
   + velocity (double) - Velocity driving the robot
