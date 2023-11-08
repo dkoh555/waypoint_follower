@@ -1,4 +1,4 @@
-# ME495 Embedded Systems Homework 1
+# ME495: Waypoint Follower
 Author: Damien Koh
 
 ## Repository Description
