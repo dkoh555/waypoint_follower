@@ -1,4 +1,4 @@
-# ME495: Waypoint Follower
+# ME495: Waypoint Follower Robot
 Author: Damien Koh
 
 ## Repository Description
